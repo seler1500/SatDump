@@ -1,4 +1,5 @@
 #include "usrp_sdr.h"
+#include "imgui/imgui.h"
 
 void USRPSource::set_gains()
 {
@@ -12,16 +13,25 @@ void USRPSource::set_gains()
 void USRPSource::open_sdr()
 {
     uhd::device_addrs_t devlist = uhd::device::find(uhd::device_addr_t());
-
     uhd::device_addr_t addr = devlist[std::stoi(d_sdr_id)];
 
-    // USB transport parameters, optimal values from testing
-    addr["recv_frame_size"] = "8000"; // RX frame size
-    addr["num_recv_frames"] = "1900"; // RX buffer size
+    // USB transport parameters, modify as you wish
+    addr["recv_frame_size"] = usb_frame_size;      // RX frame size
+    addr["num_recv_frames"] = usb_buffer_size; // RX buffer size
     // addr["send_frame_size"] = "8000";      // TX frame size
-    // addr["num_send_frames"] = "1900";      // TX buffer size
+    // addr["num_send_frames"] = "1900";      // RX buffer size
 
     usrp_device = uhd::usrp::multi_usrp::make(addr);
+try {
+    usrp_device->set_clock_source(clock_source);
+    usrp_device->set_time_source(clock_source);
+    logger->info("USRP clock source set to %s", clock_source.c_str());
+}
+catch (const std::exception &e)
+{
+    logger->error("Failed to set clock source: %s", e.what());
+}
+
 
     // uhd::meta_range_t master_clock_range = usrp_device->get_master_clock_rate_range();
     // usrp_device->set_master_clock_rate(master_clock_range.stop());
@@ -93,7 +103,7 @@ void USRPSource::open_channel()
         }
     }
 
-    samplerate_widget.set_list(available_samplerates, false);
+    samplerate_widget.set_list(available_samplerates, true);
 
     // Restore the previously selected samplerate if it's still available
     samplerate_widget.set_value(current_samplerate, 0);
@@ -247,7 +257,22 @@ void USRPSource::drawControlUI()
         else if (selected_bit_depth == 1)
             bit_depth = 16;
     }
+    
+    // Select a reference clock source, this feature was not tested yet!
+            
+    if (RImGui::Combo("Reference clock", &selected_clock_source,
+                      "Internal\0"
+                      "External\0"))
+    {
+        if (selected_clock_source == 0)
+            clock_source = "internal";
+        else if (selected_clock_source == 1)
+            clock_source = "external";
+    }
 
+    ImGui::InputText("USB Buffer size", &usb_buffer_size);
+    ImGui::InputText("USB Frame size", &usb_frame_size);
+    
     if (is_started)
         RImGui::endDisabled();
 

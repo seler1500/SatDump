@@ -1,6 +1,7 @@
 #pragma once
 
 #include "common/dsp_source_sink/dsp_sample_source.h"
+#include <string>
 #include <uhd.h>
 #include <uhd/device.hpp>
 #include <uhd/usrp/multi_usrp.hpp>
@@ -31,6 +32,13 @@ protected:
     int antenna = 0;
     float gain = 0;
     int bit_depth = 16;
+
+    std::string usb_buffer_size = "1900";
+    std::string active_size = "1900";
+    std::string usb_frame_size = "8000";
+    std::string active_frame_size = "8000";
+    std::string clock_source = "internal";
+    int selected_clock_source = 0;
 
     void set_gains();
 
