@@ -1,21 +1,29 @@
 #include "dsp_flowgraph_register.h"
+#include "common/dsp_source_sink/format_notated.h"
 #include "core/plugin.h"
 
 #include "dsp/agc/agc.h"
+#include "dsp/agc/blk_agc.h"
 #include "dsp/clock_recovery/clock_recovery_mm_fast.h"
 #include "dsp/conv/char_to_float.h"
 #include "dsp/conv/complex_to_float.h"
 #include "dsp/conv/complex_to_ifloat.h"
+#include "dsp/conv/complex_to_imag.h"
+#include "dsp/conv/complex_to_mag.h"
+#include "dsp/conv/complex_to_mag_squared.h"
+#include "dsp/conv/complex_to_real.h"
 #include "dsp/conv/float_to_char.h"
 #include "dsp/conv/float_to_complex.h"
 #include "dsp/conv/ifloat_to_complex.h"
 #include "dsp/conv/real_to_complex.h"
 #include "dsp/conv/short_to_float.h"
+#include "dsp/conv/uchar_to_float.h"
 #include "dsp/device/dev.h"
 #include "dsp/fft/fft_pan.h"
 #include "dsp/filter/rrc.h"
 #include "dsp/flowgraph/dsp_flowgraph_handler.h"
 #include "dsp/flowgraph/flowgraph.h"
+#include "dsp/hier/psk_demod.h"
 #include "dsp/io/file_sink.h"
 #include "dsp/io/file_source.h"
 #include "dsp/io/iq_sink.h"
@@ -28,7 +36,9 @@
 #include "dsp/utils/add.h"
 #include "dsp/utils/blanker.h"
 #include "dsp/utils/correct_iq.h"
+#include "dsp/utils/exponentiate.h"
 #include "dsp/utils/multiply.h"
+#include "dsp/utils/samplerate_meter.h"
 #include "dsp/utils/subtract.h"
 #include "dsp/utils/throttle.h"
 
@@ -82,6 +92,20 @@ namespace satdump
             }
         };
 
+        template <typename T>
+        class NodeSamplerateMeter : public ndsp::NodeInternal
+        {
+        public:
+            NodeSamplerateMeter(const ndsp::Flowgraph *f) : ndsp::NodeInternal(f, std::make_shared<ndsp::SamplerateMeterBlock<T>>()) {}
+
+            virtual bool render()
+            {
+                ndsp::NodeInternal::render();
+                ImGui::Text("%s", format_notated(((ndsp::SamplerateMeterBlock<T> *)blk.get())->measured_samplerate, "SPS", 4).c_str());
+                return false;
+            }
+        };
+
         class NodeTestFFT : public ndsp::NodeInternal
         {
         private:
@@ -116,16 +140,22 @@ namespace satdump
 
         void registerNodesInFlowgraph(ndsp::Flowgraph &flowgraph)
         {
-            registerNode<NodeTestIQSource>(flowgraph, "iq_source_cc", "IO/IQ Source");
+            registerNode<NodeTestIQSource>(flowgraph, "IO/IQ Source");
+
+            registerNode<ndsp::NodeSamplerateMeter<complex_t>>(flowgraph, "Utils/Samplerate Meter CC");
+            registerNode<ndsp::NodeSamplerateMeter<float>>(flowgraph, "Utils/Samplerate Meter FF");
 
             registerNodeSimple<ndsp::IQSinkBlock>(flowgraph, "IO/IQ Sink");
 
-            registerNode<NodeTestFFT>(flowgraph, "fft_pan_cc", "FFT/FFT Pan");
-            registerNode<NodeTestConst>(flowgraph, "const_disp_c", "View/Constellation Display");
-            registerNode<NodeTestHisto>(flowgraph, "histo_disp_c", "View/Histogram Display");
+            registerNode<NodeTestFFT>(flowgraph, "FFT/FFT Pan");
+            registerNode<NodeTestConst>(flowgraph, "View/Constellation Display");
+            registerNode<NodeTestHisto>(flowgraph, "View/Histogram Display");
 
             registerNodeSimple<ndsp::AGCBlock<complex_t>>(flowgraph, "AGC/Agc CC");
             registerNodeSimple<ndsp::AGCBlock<float>>(flowgraph, "AGC/Agc FF");
+
+            registerNodeSimple<ndsp::BlkAGCBlock<complex_t>>(flowgraph, "AGC/Block Agc CC");
+            registerNodeSimple<ndsp::BlkAGCBlock<float>>(flowgraph, "AGC/Block Agc FF");
 
             registerNodeSimple<ndsp::MultiplyBlock<float>>(flowgraph, "Utils/Multiply FF");
             registerNodeSimple<ndsp::MultiplyBlock<complex_t>>(flowgraph, "Utils/Multiply CC");
@@ -171,9 +201,12 @@ namespace satdump
             registerNodeSimple<ndsp::BlankerBlock<complex_t>>(flowgraph, "Utils/Blanker CC");
             registerNodeSimple<ndsp::BlankerBlock<float>>(flowgraph, "Utils/Blanker FF");
 
+            registerNodeSimple<ndsp::ExponentiateBlock>(flowgraph, "Utils/Exponentiate CC");
+
             registerNodeSimple<ndsp::NNGIQSinkBlock>(flowgraph, "IO/NNG IQ Sink");
 
             registerNodeSimple<ndsp::WaveformBlock<float>>(flowgraph, "IO/Waveform F");
+            registerNodeSimple<ndsp::WaveformBlock<complex_t>>(flowgraph, "IO/Waveform C");
 
             registerNodeSimple<ndsp::FileSourceBlock<complex_t>>(flowgraph, "IO/File Source C");
             registerNodeSimple<ndsp::FileSourceBlock<float>>(flowgraph, "IO/File Source F");
@@ -187,6 +220,7 @@ namespace satdump
             registerNodeSimple<ndsp::FileSinkBlock<int8_t>>(flowgraph, "IO/File Sink H");
             registerNodeSimple<ndsp::FileSinkBlock<uint8_t>>(flowgraph, "IO/File Sink B");
 
+            registerNodeSimple<ndsp::UCharToFloatBlock>(flowgraph, "Conv/UChar To Float");
             registerNodeSimple<ndsp::CharToFloatBlock>(flowgraph, "Conv/Char To Float");
             registerNodeSimple<ndsp::ShortToFloatBlock>(flowgraph, "Conv/Short To Float");
 
@@ -195,10 +229,16 @@ namespace satdump
             registerNodeSimple<ndsp::IFloatToComplexBlock>(flowgraph, "Conv/IFloat To Complex");
             registerNodeSimple<ndsp::ComplexToIFloatBlock>(flowgraph, "Conv/Complex To IFloat");
 
-            registerNodeSimple<ndsp::RealToComplexBlock>(flowgraph, "Conv/Real to Complex");
+            registerNodeSimple<ndsp::RealToComplexBlock>(flowgraph, "Conv/Real To Complex");
 
             registerNodeSimple<ndsp::ComplexToFloatBlock>(flowgraph, "Conv/Complex To Float");
             registerNodeSimple<ndsp::FloatToComplexBlock>(flowgraph, "Conv/Float To Complex");
+            registerNodeSimple<ndsp::ComplexToImagBlock>(flowgraph, "Conv/Complex To Imag");
+            registerNodeSimple<ndsp::ComplexToRealBlock>(flowgraph, "Conv/Complex To Real");
+            registerNodeSimple<ndsp::ComplexToMagBlock>(flowgraph, "Conv/Complex To Mag");
+            registerNodeSimple<ndsp::ComplexToMagSquaredBlock>(flowgraph, "Conv/Complex To Mag²");
+
+            registerNodeSimple<ndsp::PSKDemodHierBlock>(flowgraph, "Modem/PSK Demod");
 
             eventBus->fire_event<RegisterNodesEvent>({flowgraph.node_internal_registry});
 

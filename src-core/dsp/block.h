@@ -112,14 +112,14 @@ namespace satdump
              * streams. You should not modify them.
              * @return The block's input BlockIOs.
              */
-            std::vector<BlockIO> get_inputs() { return inputs; }
+            virtual std::vector<BlockIO> get_inputs() { return inputs; }
 
             /**
              * @brief Get the block's output configurations and
              * streams. You should not modify them.
              * @return The block's output BlockIOs.
              */
-            std::vector<BlockIO> get_outputs() { return outputs; }
+            virtual std::vector<BlockIO> get_outputs() { return outputs; }
 
             /**
              * @brief Link an input to an output stream of some sort.
@@ -128,7 +128,7 @@ namespace satdump
              * @param f input BlockIO to link to an input
              * @param i index of the input (probably quite often 0)
              */
-            void set_input(BlockIO f, int i)
+            virtual void set_input(BlockIO f, int i)
             {
                 if (i >= (int)inputs.size())
                     throw satdump_exception("Input index " + std::to_string(i) + " does not exist for " + d_id + "!");
@@ -144,7 +144,7 @@ namespace satdump
              * @param nbuf of buffers to setup in the output
              * @return BlockIO struct of the output
              */
-            BlockIO get_output(int i, int nbuf)
+            virtual BlockIO get_output(int i, int nbuf)
             {
                 if (i >= (int)outputs.size())
                     throw satdump_exception("Ouput index " + std::to_string(i) + " does not exist for " + d_id + "!");
@@ -216,6 +216,18 @@ namespace satdump
                 if (blk_should_run || blk_th.joinable())
                     throw satdump_exception("Block wasn't properly stopped before destructor was called!");
             }
+
+        public:
+            /**
+             * @brief Returns true if a block is async.
+             * An async block is a block that has outputs
+             * without inputs or inputs that won't directly
+             * affect/stop the outputs' behavior. This includes
+             * sources (eg, a SDR Device), TXing and RXing at the
+             * same time, and anything with similar requirements.
+             * @return true if the block is async
+             */
+            virtual bool is_async() { return inputs.size() == 0; }
 
         public:
             /**
@@ -349,11 +361,20 @@ namespace satdump
              * loop it should exit & joins the thread to wait.
              * TODOREWORK, potentially allow sending the terminator
              * as well to force-quit.
+             * @param stop_now the normal stop just marks the block
+             * for stopping when convenient, when the work() function
+             * exists by itself. Setting this to true will tell the block
+             * to stop now if it can send a terminator.
+             * @param force this will exit work() as soon as
+             * possible, leaving it in an unknown state. Do not
+             * use until it is for live-reconfiguration!
              */
-            virtual void stop(bool stop_now = false)
+            virtual void stop(bool stop_now = false, bool force = false)
             { // TODOREWORK allow sending terminator in this function?
                 if (stop_now)
                     work_should_exit = true;
+                if (force)
+                    blk_should_run = false;
 
                 blk_th_mtx.lock();
                 if (blk_th.joinable())

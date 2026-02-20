@@ -6,11 +6,15 @@
 #include "core/plugin.h"
 
 #include "core/style.h"
-#include "dsp/cyclo_test.h"
 #include "dsp/flowgraph/dsp_flowgraph_handler.h"
-#include "explorer/dsp/fm_test.h"
 #include "handlers/dataset/dataset_handler.h"
 #include "handlers/dummy_handler.h"
+#include "handlers/experimental/decoupled/rec_backend.h"
+#include "handlers/experimental/decoupled/rec_frontend.h"
+#include "handlers/experimental/decoupled/test/test_http.h"
+#include "handlers/experimental/decoupled/test/test_http_client.h"
+#include "handlers/experimental/decoupled/testremote.h"
+#include "handlers/experimental/decoupled/testremote_backend.h"
 #include "handlers/product/image_product_handler.h" // TODOREWORK CLEAN
 #include "handlers/projection/projection_handler.h"
 #include "handlers/vector/shapefile_handler.h"
@@ -20,8 +24,10 @@
 #include "imgui/imgui.h"
 
 // TODOREWORK
-#include "dsp/newrec.h"
-#include "dsp/waterfall_test.h"
+#include "handlers/experimental/dsp/cyclo_test.h"
+#include "handlers/experimental/dsp/fm_test.h"
+#include "handlers/experimental/dsp/newrec.h"
+#include "handlers/experimental/dsp/waterfall_test.h"
 
 #include "image/io.h"
 
@@ -254,6 +260,11 @@ namespace satdump
                     { // TODOREWORK?
                         if (ImGui::MenuItem("DSP Flowgraph"))
                             addHandler(std::make_shared<handlers::DSPFlowGraphHandler>());
+                        ImGui::EndMenu();
+                    }
+
+                    if (ImGui::BeginMenu("Experimental"))
+                    { // TODOREWORK?
                         if (ImGui::MenuItem("Waterfall TEST"))
                             addHandler(std::make_shared<handlers::WaterfallTestHandler>());
                         if (ImGui::MenuItem("NewRec TEST"))
@@ -262,6 +273,12 @@ namespace satdump
                             addHandler(std::make_shared<handlers::CycloHelperHandler>());
                         if (ImGui::MenuItem("FM Test"))
                             addHandler(std::make_shared<handlers::FMTestHandler>());
+                        if (ImGui::MenuItem("TestRemoteStuff"))
+                            addHandler(std::make_shared<handlers::TestRemoteHandlerHandler>(std::make_shared<handlers::TestHttpBackend>(std::make_shared<handlers::TestRemoteHandlerBackend>())));
+                        if (ImGui::MenuItem("TestRemoteRec"))
+                            addHandler(std::make_shared<handlers::RecFrontendHandler>(std::make_shared<handlers::TestHttpBackend>(std::make_shared<handlers::RecBackend>())));
+                        if (ImGui::MenuItem("TestRemoteClient"))
+                            addHandler(std::make_shared<handlers::RecFrontendHandler>(std::make_shared<handlers::TestHttpClientBackend>()));
                         ImGui::EndMenu();
                     }
 
@@ -315,30 +332,7 @@ namespace satdump
                     delete[] px;
                 }
 
-#if 0
-                ImGui::Image((void *)satdump_logo_texture, ImVec2(50 * ui_scale, 50 * ui_scale));
-                ImGui::SameLine();
-                ImGui::PushFont(style::bigFont);
-                ImGui::TextUnformatted(" Welcome to SatDump!");
-                ImGui::PopFont();
-
-                if (ImGui::BeginTable("##dscovrinstrumentstable", 2, ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg, {-1, ImGui::GetWindowHeight()}))
-                {
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("Shortcuts");
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("Tip of the day");
-
-                    ImGui::TableNextRow();
-                    ImGui::TableSetColumnIndex(0);
-                    ImGui::Text("Something else!?");
-                    ImGui::TableSetColumnIndex(1);
-                    ImGui::Text("Yes, why not?");
-
-                    ImGui::EndTable();
-                }
-#else
+#if 1
                 std::pair<float, float> dims = {ImGui::GetWindowWidth(), ImGui::GetWindowHeight()};
                 float scale = backend::device_scale;
 

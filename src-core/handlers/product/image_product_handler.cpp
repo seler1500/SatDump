@@ -13,6 +13,7 @@
 
 #include "common/widgets/json_editor.h"
 #include "products/image/calibration_units.h" // TODOREWORK
+#include "products/image_product.h"
 #include <cstddef>
 #include <string>
 
@@ -91,7 +92,7 @@ namespace satdump
 
         void ImageProductHandler::drawMenu()
         {
-            bool needs_to_be_disabled = is_processing;
+            bool needs_to_be_disabled = is_processing || img_handler->get_is_processing();
 
             if (ImGui::CollapsingHeader("Channels", ImGuiTreeNodeFlags_DefaultOpen))
             {
@@ -129,6 +130,25 @@ namespace satdump
                         ImGui::SameLine();
                         ImGui::Text("(%s)", format_notated(SPEED_OF_LIGHT_M_S / freq, "m", 2).c_str());
                         ImGui::Text(u8"%.3f cm\u207b\u00b9 / %s", ch.wavenumber, format_notated(freq, "Hz", 2).c_str());
+                    }
+
+                    if (ch.polarization != products::ImageProduct::POL_NONE)
+                    {
+                        auto pol = product->get_channel_polarization(ch.abs_index);
+                        if (pol == products::ImageProduct::POL_HORIZONTAL)
+                            ImGui::Text("Pol : H");
+                        else if (pol == products::ImageProduct::POL_VERTICAL)
+                            ImGui::Text("Pol : V");
+                        else if (pol == products::ImageProduct::POL_RHCP)
+                            ImGui::Text("Pol : R");
+                        else if (pol == products::ImageProduct::POL_LHCP)
+                            ImGui::Text("Pol : L");
+                    }
+
+                    if (ch.bandwidth != -1)
+                    {
+                        auto bw = product->get_channel_bandwidth(ch.abs_index);
+                        ImGui::Text("Bandwidth : %s / %s", format_notated(bw, "Hz", 2).c_str(), format_notated(SPEED_OF_LIGHT_M_S / bw, "m", 2).c_str());
                     }
                 }
 
@@ -187,7 +207,7 @@ namespace satdump
 
                 // Expression entry
                 ImGui::SetNextItemWidth(ImGui::GetWindowSize().x - 10 * ui_scale);
-                ImGui::InputTextMultiline("##expression", &expression, {0,0}, ImGuiInputTextFlags_WordWrap);
+                ImGui::InputTextMultiline("##expression", &expression, {0, 0}, ImGuiInputTextFlags_WordWrap);
                 if (ImGui::Button("Apply"))
                 {
                     channel_selection_curr_id = -1;
@@ -211,9 +231,13 @@ namespace satdump
             }
 
             // The image controls
+            if (needs_to_be_disabled)
+                style::beginDisabled();
             img_handler->drawMenu();
             if (img_handler->wasMenuTriggered) // If image got anything changed, reset too
                 resetPreset();
+            if (needs_to_be_disabled)
+                style::endDisabled();
 
             // Advanced controls
             if (enabled_advanced_menus)

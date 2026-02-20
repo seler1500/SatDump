@@ -53,6 +53,10 @@ namespace satdump
 
                 if (images[c].wavenumber != -1)
                     contents["images"][c]["wavenumber"] = images[c].wavenumber;
+                if (images[c].polarization != POL_NONE)
+                    contents["images"][c]["polarization"] = images[c].polarization;
+                if (images[c].bandwidth != -1)
+                    contents["images"][c]["bandwidth"] = images[c].bandwidth;
                 if (images[c].calibration_type != "")
                     contents["images"][c]["calibration_type"] = images[c].calibration_type;
                 //// META
@@ -88,7 +92,7 @@ namespace satdump
 
 #ifdef __ANDROID__
             JavaVM *java_vm = g_App->activity->vm;
-            JNIEnv *java_env = NULL;
+            JNIEnv *java_env = NULL; // TODOREWORK?
 
             jint jni_return = java_vm->GetEnv((void **)&java_env, JNI_VERSION_1_6);
             if (jni_return == JNI_ERR)
@@ -155,6 +159,10 @@ namespace satdump
 
                 if (contents["images"][c].contains("wavenumber"))
                     img_holder.wavenumber = contents["images"][c]["wavenumber"];
+                if (contents["images"][c].contains("polarization"))
+                    img_holder.polarization = contents["images"][c]["polarization"];
+                if (contents["images"][c].contains("bandwidth"))
+                    img_holder.bandwidth = contents["images"][c]["bandwidth"];
                 if (contents["images"][c].contains("calibration_type"))
                     img_holder.calibration_type = contents["images"][c]["calibration_type"];
                 //// META

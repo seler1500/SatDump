@@ -466,7 +466,8 @@ namespace satdump
             }
 
             void start();
-            void stop(bool stop_now = false);
+            void stop(bool stop_now = false, bool force = false);
+            bool is_async() { return rx_ch_number > 0; }
 
         public:
             static std::vector<DeviceInfo> listDevs();

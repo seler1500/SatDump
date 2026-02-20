@@ -60,50 +60,52 @@ then
     SIGN_FLAG="-ns"
 fi
 
-echo "Copying libraries..."
-mkdir MacApp/SatDump.app/Contents/libs
-cp $GITHUB_WORKSPACE/deps/lib/*.dylib MacApp/SatDump.app/Contents/libs
-# We are already in the build dir, that's where the satdump dylibs are - ./ and ./plugins
-cp ./*.dylib MacApp/SatDump.app/Contents/libs
-cp ./plugins/*.dylib MacApp/SatDump.app/Contents/libs
-
-# Symlinks are not copied by dylibbuilder, we gotta copy these homebrew libs manually.
-# Surely there has to be a better way to do this? This should work for the time being,
-# as these paths should be standardized.
-cp $HOMEBREW_LIB/lib/libjemalloc* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libglfw* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libarmadillo* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libvolk* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libpng* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libfftw* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libnng* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libzstd* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libtiff* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libusb* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libportaudio* MacApp/SatDump.app/Contents/libs
-cp $HOMEBREW_LIB/lib/libhdf5* MacApp/SatDump.app/Contents/libs
-
-# Libomp is not in /lib becuase it was born that way, we gotta use the full path
-cp $HOMEBREW_LIB/opt/libomp/lib/libomp* MacApp/SatDump.app/Contents/libs
-
-
-echo "Re-linking binaries"
+# Omp, openblas, and gfortran are not in $HOMEBREW_LIB/lib for some ungodly reason; we include their full paths instead
+echo "Packaging and re-linking libraries..."
 plugin_args=$(ls MacApp/SatDump.app/Contents/Resources/plugins | xargs printf -- '-x MacApp/SatDump.app/Contents/Resources/plugins/%s ')
 dylibbundler $SIGN_FLAG \
   -cd \
-  -s $HOMEBREW_LIB/lib \
-  -s $GITHUB_WORKSPACE/deps/lib \
+  -b \
+  -of \
   -s . \
+  -s $GITHUB_WORKSPACE/deps/lib \
+  -s $HOMEBREW_LIB/lib \
+  -s $HOMEBREW_LIB/opt/libomp/lib \
+  -s $HOMEBREW_LIB/opt/openblas/lib \
+  -s $HOMEBREW_LIB/opt/gfortran/lib/gcc/current \
   -d MacApp/SatDump.app/Contents/libs \
   -x MacApp/SatDump.app/Contents/MacOS/satdump-ui \
   -x MacApp/SatDump.app/Contents/MacOS/satdump_sdr_server \
   -x MacApp/SatDump.app/Contents/MacOS/satdump \
   $plugin_args
 
+# SDRPlay is custom, not staticaly linked; we can copy it manually
+cp $GITHUB_WORKSPACE/deps/lib/libsdrplay*.dylib MacApp/SatDump.app/Contents/libs
+
+
+# Some libraries are processed more than once, dylibbundler is silly and doesn't check whether
+# it injects multiple LC_RPATH entries. MacOS is pissy about it and refuses to work with more than one,
+# so we have to remove the duplicates manually.
+echo "Removing duplicate RPATH entries..."
+find MacApp/SatDump.app/Contents/libs -name "*.dylib" | while read lib; do
+    rpaths=($(otool -l "$lib" | awk '/LC_RPATH/{getline; getline; sub(/.*path /,""); sub(/ .*/,""); print}'))
+    seen=()
+    for rp in "${rpaths[@]}"; do
+        if [[ " ${seen[*]} " != *" $rp "* ]]; then
+            seen+=("$rp")
+        else
+            install_name_tool -delete_rpath "$rp" "$lib"
+        fi
+    done
+
+    # We have to resign the libraries afterwards as we changed their Mach-O headers
+    codesign -v --force --timestamp --sign - "$lib"
+done
+
 
 if [[ -n "$MACOS_SIGNING_SIGNATURE" ]]
 then
-    echo "Code signing..."
+    echo "Signing code using proper signature..."
     for dylib in MacApp/SatDump.app/Contents/libs/*.dylib
     do
 	    codesign -v --force --timestamp --sign "$MACOS_SIGNING_SIGNATURE" $dylib
@@ -117,7 +119,14 @@ then
     codesign -v --force --options runtime --entitlements $GITHUB_WORKSPACE/macOS/Entitlements.plist --timestamp --sign "$MACOS_SIGNING_SIGNATURE" MacApp/SatDump.app/Contents/MacOS/satdump
     codesign -v --force --options runtime --entitlements $GITHUB_WORKSPACE/macOS/Entitlements.plist --timestamp --sign "$MACOS_SIGNING_SIGNATURE" MacApp/SatDump.app/Contents/MacOS/satdump_sdr_server
     codesign -v --force --options runtime --entitlements $GITHUB_WORKSPACE/macOS/Entitlements.plist --timestamp --sign "$MACOS_SIGNING_SIGNATURE" MacApp/SatDump.app/Contents/MacOS/satdump-ui
+else 
+    echo "No signature found, signing with ad-hoc signature..."
 
+    codesign -v --force --options runtime --entitlements $GITHUB_WORKSPACE/macOS/Entitlements.plist --timestamp --sign - MacApp/SatDump.app/Contents/MacOS/satdump
+    codesign -v --force --options runtime --entitlements $GITHUB_WORKSPACE/macOS/Entitlements.plist --timestamp --sign - MacApp/SatDump.app/Contents/MacOS/satdump_sdr_server
+    codesign -v --force --options runtime --entitlements $GITHUB_WORKSPACE/macOS/Entitlements.plist --timestamp --sign - MacApp/SatDump.app/Contents/MacOS/satdump-ui
+
+    codesign --force --deep --sign - MacApp/SatDump.app
 fi
 
 echo "Creating SatDump.dmg..."

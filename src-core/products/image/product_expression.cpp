@@ -9,6 +9,7 @@
 #include "logger.h"
 
 #include "products/image/image_calibrator.h"
+#include "products/image_product.h"
 #include "utils/string.h"
 
 #include "image/io.h"

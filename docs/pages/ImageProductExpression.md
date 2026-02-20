@@ -124,9 +124,9 @@ For several instruments, channels are not actually aligned with one or the other
 
 The output alignment and size will be dictated by the first channel found in the equation. Therefore `ch2, ch2, ch1` will lead to `ch2` being used as the output size/offset, while `ch1 * 0 + ch2, ch2, ch1` will generate the same output but using `ch1` as an output reference. This behaviour can be overwritten by explicitely specifying `ref_channel=1` if necessary. Do note said channel *must* be part of the expression still.
 
-## Wavelength/Frequency-based Channel selection
+## Wavelength/Frequency/Polarization/Bandwidth-based Channel selection
 
-A lot of composites are common between several instruments, and re-writing them for each can be cumbersome. Instead, it is possible to automatically select a channel by specifying a wavelength or frequency.
+A lot of composites are common between several instruments, and re-writing them for each can be cumbersome. Instead, it is possible to automatically select a channel by specifying a wavelength/frequency, bandwidth and polarization.
 
 Using `{10.4um}` will select the channel closest to 10.4um in the loaded instrument, and effectively will be getting replaced by `4` or whatever the actual channel number is. If you had `ch{10.4um}`, this would become `ch4`.
 
@@ -136,3 +136,17 @@ cch2=({830nm}, sun_angle_compensated_reflective_radiance, 0.000000, 97.050700);
 cch1=({630nm}, sun_angle_compensated_reflective_radiance, 0.000000, 90.000000);
 cch2, cch2, cch1
 ```
+
+The overall format is : `{Wavelength,Polarization,Bandwidth,WavelengthTolerance,BandwidthTolerance}`.
+
+By default, this will select any channel polarization and the frequency/wavelength with a tolerance of 5%. This can be changed by using, for example, `{10.4um,*,-1,10}`, which will select a channel of any polarization with a tolerance of 10% around 10.4um. The -1 indicates we want to ignore bandwidth. Similarly, `{89GHz,H}` will select a channel of horizontal polarization with the default tolerance of 5%.
+
+If you include a bandwidth parameter, an example could be : `{0.615um,*,0.13um}` to select AVHRR Channel 1. 
+
+Available polarizations are :
+- `N` : None/All (eg, AVHRR, MSU-MR, etc)
+- `H` : Horizontal, as defined by the instrument
+- `V` : Vertical, as defined by the instrument
+- `R` : Right-Hand circular
+- `L` : Left-Hand circular
+- `*` : Any, effectively ignore this as a selection parameter
